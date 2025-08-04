@@ -1,13 +1,23 @@
 FROM nexus3.o-ran-sc.org:10002/o-ran-sc/bldr-ubuntu18-c-go:1.9.0 as kpimonbuild
 
+ARG DBAAS_SERVICE_HOST=10.0.2.12
+ARG DBAAS_SERVICE_PORT="6379"
+
 ENV PATH $PATH:/usr/local/bin
 ENV GOPATH /go
 ENV GOBIN /go/bin
 ENV RMR_SEED_RT /opt/routes.txt
 
-COPY routes.txt /opt/routes.txt
+ENV RMR_RTG_SVC="9999" \
+  VERBOSE=0 \
+  CONFIG_FILE=/opt/config-file.json \
+  DBAAS_SERVICE_HOST=${DBAAS_SERVICE_HOST} \
+  DBAAS_SERVICE_PORT=${DBAAS_SERVICE_PORT}
 
-ARG RMRVERSION=4.0.2
+COPY routes.txt /opt/routes.txt
+COPY xapp-descriptor/config.json /opt/config-file.json
+
+ARG RMRVERSION=4.0.5
 ARG RMRLIBURL=https://packagecloud.io/o-ran-sc/release/packages/debian/stretch/rmr_${RMRVERSION}_amd64.deb/download.deb
 ARG RMRDEVURL=https://packagecloud.io/o-ran-sc/release/packages/debian/stretch/rmr-dev_${RMRVERSION}_amd64.deb/download.deb
 RUN wget --content-disposition ${RMRLIBURL} && dpkg -i rmr_${RMRVERSION}_amd64.deb
@@ -64,6 +74,7 @@ ENV GOBIN /go/bin
 ENV RMR_SEED_RT /opt/routes.txt
 
 COPY routes.txt /opt/routes.txt
+COPY xapp-descriptor/config.json /opt/config-file.json
 
 COPY --from=kpimonbuild /usr/local/lib /usr/local/lib
 COPY --from=kpimonbuild /usr/local/include/e2ap/*.h /usr/local/include/e2ap/
