@@ -12,7 +12,6 @@ import (
 
 	"gerrit.o-ran-sc.org/r/ric-plt/sdlgo"
 	"gerrit.o-ran-sc.org/r/ric-plt/xapp-frame/pkg/xapp"
-	//"github.com/go-redis/redis"
 )
 
 type Control struct {
@@ -20,7 +19,7 @@ type Control struct {
 	eventCreateExpired int32                //maximum time for the RIC Subscription Request event creation procedure in the E2 Node
 	eventDeleteExpired int32                //maximum time for the RIC Subscription Request event deletion procedure in the E2 Node
 	rcChan             chan *xapp.RMRParams //channel for receiving rmr message
-	//client                *redis.Client        //redis client
+	// client                *redis.Client        //redis client
 	eventCreateExpiredMap map[string]bool //map for recording the RIC Subscription Request event creation procedure is expired or not
 	eventDeleteExpiredMap map[string]bool //map for recording the RIC Subscription Request event deletion procedure is expired or not
 	eventCreateExpiredMu  *sync.Mutex     //mutex for eventCreateExpiredMap
@@ -43,38 +42,37 @@ func init() {
 func NewControl() Control {
 	println("Starting new control.")
 	// str := os.Getenv("ranList")
-	str := "gnb_131_133_31000000,gnb_131_133_32000000,gnb_131_133_33000000,gnb_131_133_34000000,gnb_131_133_35000000"
+	str := "gnb:131-133-31000000,gnb:131-133-32000000,gnb:131-133-33000000,gnb:131-133-34000000,gnb:131-133-35000000"
 	println("Ran list is " + str + " ---- ")
 
-	return Control{strings.Split(str, ","),
-		5, 5,
-		make(chan *xapp.RMRParams),
-		//redis.NewClient(&redis.Options{
-		//	Addr:     os.Getenv("DBAAS_SERVICE_HOST") + ":" + os.Getenv("DBAAS_SERVICE_PORT"), //"localhost:6379"
-		//	Password: "",
-		//	DB:       0,
-		//}),
-		make(map[string]bool),
-		make(map[string]bool),
-		&sync.Mutex{},
-		&sync.Mutex{},
-		sdlgo.NewSdlInstance("kpimon", sdlgo.NewDatabase())}
+	return Control{
+		ranList: strings.Split(str, ","),
+		eventCreateExpired: 	 30, 
+		eventDeleteExpired: 	 30,
+		rcChan: 							 make(chan *xapp.RMRParams),
+		eventCreateExpiredMap: make(map[string]bool),
+		eventDeleteExpiredMap: make(map[string]bool),
+		eventCreateExpiredMu:	 &sync.Mutex{},
+		eventDeleteExpiredMu:	 &sync.Mutex{},
+		sdl:									 sdlgo.NewSdlInstance("kpimon", sdlgo.NewDatabase()),
+	}
 }
 
 func ReadyCB(i interface{}) {
 	c := i.(*Control)
 
 	c.startTimerSubReq()
+
+	xapp.Logger.Debug("=============\nSub request done.")
+
 	go c.controlLoop()
 }
 
 func (c *Control) Run() {
-	//_, err := c.client.Ping().Result()
-	//if err != nil {
-	//	xapp.Logger.Error("Failed to connect to Redis DB with %v", err)
-	//	log.Printf("Failed to connect to Redis DB with %v", err)
-	//}
+	xapp.Logger.Debug("===========\nRunning the xApp...")
+	
 	if len(c.ranList) > 0 {
+		xapp.Logger.Debug("===========\nCheck xApp ready...")
 		xapp.SetReadyCB(ReadyCB, c)
 		xapp.Run(c)
 	} else {
@@ -85,7 +83,7 @@ func (c *Control) Run() {
 }
 
 func (c *Control) startTimerSubReq() {
-	timerSR := time.NewTimer(5 * time.Second)
+	timerSR := time.NewTimer(2 * time.Second)
 	count := 0
 
 	go func(t *time.Timer) {
@@ -129,12 +127,16 @@ func (c *Control) rmrReplyToSender(params *xapp.RMRParams) (err error) {
 }
 
 func (c *Control) controlLoop() {
+	xapp.Logger.Debug("===========Starting KPIMON control loop.")
 	for {
+		xapp.Logger.Debug("===========Receiving from socket channel.")
 		msg := <-c.rcChan
 		xapp.Logger.Debug("Received message type: %d", msg.Mtype)
 		log.Printf("Received message type: %d", msg.Mtype)
 		switch msg.Mtype {
 		case 12050:
+			c.handleIndication(msg)
+		case 12030:
 			c.handleIndication(msg)
 		case 12011:
 			c.handleSubscriptionResponse(msg)
@@ -1247,7 +1249,8 @@ func (c *Control) sendRicSubRequest(subID int, requestSN int, funcID int) (err e
 		log.Printf("Set Payload: %x", params.Payload)
 
 		//params.Meid = &xapp.RMRMeid{RanName: c.ranList[index]}
-		params.Meid = &xapp.RMRMeid{PlmnID: "313131", EnbID: "::", RanName: "gnb_131_133_31000000"}
+		// params.Meid = &xapp.RMRMeid{PlmnID: "313131", EnbID: "::", RanName: "gnb:131-133-31000000"}
+		params.Meid = &xapp.RMRMeid{ RanName: "gnb:131-133-31000000"}
 		xapp.Logger.Debug("The RMR message to be sent is %d with SubId=%d", params.Mtype, params.SubId)
 		log.Printf("The RMR message to be sent is %d with SubId=%d", params.Mtype, params.SubId)
 
@@ -1258,7 +1261,9 @@ func (c *Control) sendRicSubRequest(subID int, requestSN int, funcID int) (err e
 			return err
 		}
 
-		c.setEventCreateExpiredTimer(params.Meid.RanName)
+		xapp.Logger.Debug("RIC_SUB_REQ succesfully being sent.")
+
+		// c.setEventCreateExpiredTimer(params.Meid.RanName)
 		//c.ranList = append(c.ranList[:index], c.ranList[index+1:]...)
 		//index--
 	}
@@ -1283,10 +1288,10 @@ func (c *Control) sendRicSubDelRequest(subID int, requestSN int, funcID int) (er
 
 	if funcID == 0 {
 		//params.Meid = &xapp.RMRMeid{PlmnID: "::", EnbID: "::", RanName: "0"}
-		params.Meid = &xapp.RMRMeid{PlmnID: "313131", EnbID: "::", RanName: "gnb_131_133_31000000"}
+		params.Meid = &xapp.RMRMeid{PlmnID: "313131", EnbID: "::", RanName: "gnb:131-133-31000000"}
 	} else {
 		//params.Meid = &xapp.RMRMeid{PlmnID: "::", EnbID: "::", RanName: "3"}
-		params.Meid = &xapp.RMRMeid{PlmnID: "313131", EnbID: "::", RanName: "gnb_131_133_31000000"}
+		params.Meid = &xapp.RMRMeid{PlmnID: "313131", EnbID: "::", RanName: "gnb:131-133-31000000"}
 	}
 
 	xapp.Logger.Debug("The RMR message to be sent is %d with SubId=%d", params.Mtype, params.SubId)
