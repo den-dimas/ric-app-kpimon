@@ -158,6 +158,12 @@ func (c *Control) handleIndication(params *xapp.RMRParams) (err error) {
 	var e2ap *E2ap
 	var e2sm *E2sm
 
+	b, err := json.MarshalIndent(params, "", "  ")
+	if err != nil {
+		xapp.Logger.Error("The params: %v", err)
+	}
+	xapp.Logger.Debug("The params: %s", string(b))
+
 	indicationMsg, err := e2ap.GetIndicationMessage(params.Payload)
 	if err != nil {
 		xapp.Logger.Error("Failed to decode RIC Indication message: %v", err)
@@ -344,7 +350,12 @@ func (c *Control) handleIndication(params *xapp.RMRParams) (err error) {
 		return
 	}
 
+	xapp.Logger.Debug("RIC Indication Header decoded!")
+
 	indMsg, err := e2sm.GetIndicationMessage(indicationMsg.IndMessage)
+
+	xapp.Logger.Debug("RIC Indication Message: %v", indMsg)
+	
 	if err != nil {
 		xapp.Logger.Error("Failed to decode RIC Indication Message: %v", err)
 		log.Printf("Failed to decode RIC Indication Message: %v", err)
@@ -1005,21 +1016,27 @@ func (c *Control) handleIndication(params *xapp.RMRParams) (err error) {
 }
 
 func (c *Control) handleSubscriptionResponse(params *xapp.RMRParams) (err error) {
+	b, err := json.MarshalIndent(params, "", "  ")
+    if err != nil {
+			xapp.Logger.Error("The params: %v", err)
+    }
+	xapp.Logger.Debug("The params: %s", string(b))
+	
 	xapp.Logger.Debug("The SubId in RIC_SUB_RESP is %d", params.SubId)
 	log.Printf("The SubId in RIC_SUB_RESP is %d", params.SubId)
 
-	ranName := params.Meid.RanName
-	c.eventCreateExpiredMu.Lock()
-	_, ok := c.eventCreateExpiredMap[ranName]
-	if !ok {
-		c.eventCreateExpiredMu.Unlock()
-		xapp.Logger.Debug("RIC_SUB_REQ has been deleted!")
-		log.Printf("RIC_SUB_REQ has been deleted!")
-		return nil
-	} else {
-		c.eventCreateExpiredMap[ranName] = true
-		c.eventCreateExpiredMu.Unlock()
-	}
+	// ranName := params.Meid.RanName
+	// c.eventCreateExpiredMu.Lock()
+	// _, ok := c.eventCreateExpiredMap[ranName]
+	// if !ok {
+	// 	c.eventCreateExpiredMu.Unlock()
+	// 	xapp.Logger.Debug("RIC_SUB_REQ has been deleted!")
+	// 	log.Printf("RIC_SUB_REQ has been deleted!")
+	// 	return nil
+	// } else {
+	// 	c.eventCreateExpiredMap[ranName] = true
+	// 	c.eventCreateExpiredMu.Unlock()
+	// }
 
 	var cep *E2ap
 	subscriptionResp, err := cep.GetSubscriptionResponseMessage(params.Payload)
@@ -1263,7 +1280,7 @@ func (c *Control) sendRicSubRequest(subID int, requestSN int, funcID int) (err e
 
 		xapp.Logger.Debug("RIC_SUB_REQ succesfully being sent.")
 
-		// c.setEventCreateExpiredTimer(params.Meid.RanName)
+		c.setEventCreateExpiredTimer(params.Meid.RanName)
 		//c.ranList = append(c.ranList[:index], c.ranList[index+1:]...)
 		//index--
 	}
