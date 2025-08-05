@@ -12,29 +12,27 @@ The near-RT-RIC has to be installed. If is not, go to this repository and follow
 
 ## Deploy and Run the xApp
 
-1. Clone the repository
+##### Clone the repository
 ```bash
 cd ~
 git clone https://github.com/den-dimas/ric-app-kpimon.git kpimon
 ```
 
-2. Deploy the xApp
+##### Deploy the xApp
 ```bash
 cd ~/kpimon
 ./redeploy.sh
 ```
 
-3. Run the kpimon xApp
-  
-  a. Open new terminal
-  ```bash
-  docker exec -it ns-o-ran /bin/bash
-  cd ns3-mmwave-oran/
-  ./ns3 run scratch/scenario-zero.cc
-  ```
-
-  b. Open another new terminal
-  ```bash
-  docker exec -it kpimon /bin/bash
-  ./kpimon -f /opt/config-file.json
-  ```
+##### Run the kpimon xApp
+1. Open new terminal
+```bash
+docker exec -it ns-o-ran /bin/bash
+cd ns3-mmwave-oran/
+./ns3 run scratch/scenario-zero.cc
+```
+2. Open another new terminal
+```bash
+docker exec -it kpimon /bin/bash
+./kpimon -f /opt/config-file.json
+```
